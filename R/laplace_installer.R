@@ -36,6 +36,12 @@
 #' to `PATH` for the current R session only (via `Sys.setenv()`), and a
 #' message explains how to make that permanent in your shell profile.
 #'
+#' `cargo install` is always called with `--force`. Without it, Cargo
+#' silently skips reinstalling when it thinks the same version is already
+#' present, which would leave a stale binary in place if the source changed
+#' without a version bump in `Cargo.toml` — exactly the kind of thing a
+#' "reinstall" helper should not do quietly.
+#'
 #' @examples
 #' \dontrun{
 #' laplace_install()
@@ -94,7 +100,7 @@ laplace_install <- function(root = "~/.local",
   if (!quiet) message("Building laplace with cargo (this may take a minute) ...")
   install_result <- system2(
     "cargo",
-    c("install", "--path", shQuote(src_dir), "--root", shQuote(root)),
+    c("install", "--path", shQuote(src_dir), "--root", shQuote(root), "--force"),
     stdout = TRUE,
     stderr = TRUE
   )
