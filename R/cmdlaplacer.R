@@ -47,13 +47,25 @@ laplace_model <- function(path, stan_only = FALSE, out_dir = NULL, ...) {
   }
 
   if (nzchar(Sys.which("laplace")) == FALSE) {
-    stop(
-      "Could not find the `laplace` CLI on your PATH.\n",
-      "laplace_model() requires the Laplace compiler to be installed.\n",
-      "See https://github.com/mlatinov/laplace_tools for installation instructions,\n",
-      "or make sure the `laplace` binary is on your PATH before retrying.",
-      call. = FALSE
-    )
+
+    if (interactive()) {
+      install_now <- isTRUE(utils::askYesNo(
+        "The `laplace` CLI was not found on your PATH. Install it now via cargo? (requires git and cargo)"
+      ))
+      if (isTRUE(install_now)) {
+        laplace_install()
+      }
+    }
+
+    if (nzchar(Sys.which("laplace")) == FALSE) {
+      stop(
+        "Could not find the `laplace` CLI on your PATH.\n",
+        "laplace_model() requires the Laplace compiler to be installed.\n",
+        "Call laplace_install() to install it automatically, or see\n",
+        "https://github.com/mlatinov/laplace for manual installation instructions.",
+        call. = FALSE
+      )
+    }
   }
 
   if (is.null(out_dir)) {
