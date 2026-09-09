@@ -15,7 +15,7 @@ Nothing about compilation, caching, or diagnostics happens in R — that's all d
 
 `cmdlaplacer` requires two things to be installed separately first:
 
-1. **The `laplace` CLI**, available on your system `PATH`. See [installation instructions](https://github.com/mlatinov/laplace_tools) in the main Laplace repo.
+1. **The `laplace` CLI**, available on your system `PATH`.
 2. **cmdstanr**, plus a working CmdStan installation. See the [cmdstanr installation guide](https://mc-stan.org/cmdstanr/articles/cmdstanr.html).
 
 Then install the package itself:
@@ -24,6 +24,19 @@ Then install the package itself:
 # install.packages("remotes")
 remotes::install_github("mlatinov/laplace_tools", subdir = "cmdlaplacer")
 ```
+
+### Installing the `laplace` CLI
+
+`laplace` is built from source with Cargo. If you already have `git` and a Rust toolchain (`cargo`) on your `PATH`, you can install it directly from R:
+
+```r
+library(cmdlaplacer)
+laplace_install()
+```
+
+This clones the [Laplace repository](https://github.com/mlatinov/laplace), builds it with `cargo install --path . --root ~/.local`, and adds `~/.local/bin` to `PATH` for the current session. It's the same thing you'd get from running those `git`/`cargo` commands by hand — see the [manual installation instructions](https://github.com/mlatinov/laplace#installing-laplace) if you'd rather do that yourself, or need to install `git`/Rust first.
+
+You don't need to call `laplace_install()` yourself, though: if `laplace_model()` can't find `laplace` on your `PATH` in an interactive session, it will ask whether to install it for you before failing.
 
 ## Usage
 
@@ -61,7 +74,12 @@ mod <- cmdstanr::cmdstan_model(stan_path)
 
 ## Error handling
 
-If the `laplace` CLI isn't found on your `PATH`, or if `laplace build` fails, `laplace_model()` raises an informative error rather than a raw system-call failure. If `cmdstanr` isn't installed and you haven't set `stan_only = TRUE`, you'll get a pointer to that argument instead of a package-loading error.
+If the `laplace` CLI isn't found on your `PATH`:
+
+- In an **interactive** session, `laplace_model()` asks whether to install it via `laplace_install()` before failing.
+- In a **non-interactive** session (scripts, `Rscript`, CI), it never prompts — it just raises an informative error pointing at `laplace_install()` or the manual installation instructions.
+
+If `laplace build` fails, or if `cmdstanr` isn't installed and you haven't set `stan_only = TRUE`, you also get a clear, specific error rather than a raw system-call failure or package-loading error.
 
 ## License
 
