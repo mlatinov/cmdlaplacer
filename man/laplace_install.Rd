@@ -52,6 +52,12 @@ those are only needed for the optional \code{--validate} flag on
 If the install directory's \verb{bin/} is not already on \code{PATH}, it is added
 to \code{PATH} for the current R session only (via \code{Sys.setenv()}), and a
 message explains how to make that permanent in your shell profile.
+
+\verb{cargo install} is always called with \code{--force}. Without it, Cargo
+silently skips reinstalling when it thinks the same version is already
+present, which would leave a stale binary in place if the source changed
+without a version bump in \code{Cargo.toml} — exactly the kind of thing a
+"reinstall" helper should not do quietly.
 }
 \examples{
 \dontrun{
