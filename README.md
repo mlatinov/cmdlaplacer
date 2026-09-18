@@ -1,6 +1,6 @@
 # cmdlaplacer
 
-A thin R wrapper around the [Laplace](https://github.com/mlatinov/laplace_tools) compiler and [cmdstanr](https://mc-stan.org/cmdstanr/), so you can go from a `.laplace` source file to a running `cmdstanr` model without touching the terminal.
+A thin R wrapper around the [Laplace](https://github.com/mlatinov/laplace) compiler and [cmdstanr](https://mc-stan.org/cmdstanr/), so you can go from a `.laplace` source file to a running `cmdstanr` model without touching the terminal.
 
 ## Why
 
@@ -22,7 +22,7 @@ Then install the package itself:
 
 ```r
 # install.packages("remotes")
-remotes::install_github("mlatinov/laplace_tools", subdir = "cmdlaplacer")
+remotes::install_github("mlatinov/cmdlaplacer")
 ```
 
 ### Installing the `laplace` CLI
@@ -57,13 +57,30 @@ stan_path <- laplace_model("models/linreg.laplace", stan_only = TRUE)
 mod <- cmdstanr::cmdstan_model(stan_path)
 ```
 
+`laplace_model()` runs `laplace build` inside the `.laplace` file's own directory, so it picks up that project's `laplace.lock` no matter what R's working directory is.
+
+### Adding a library from R
+
+`laplace_install_git()` is `laplace add --git` from R. Like the CLI, it creates `laplace.toml` and `laplace.lock` if the project doesn't have them yet:
+
+```r
+laplace_install_git(
+  "transformations",
+  "https://github.com/mlatinov/laplace-transform",
+  tag = "0.1.0",
+  subdir = "laplace",
+  project_dir = "models"
+)
+```
+
 ### Arguments
 
 | Argument | Description |
 |---|---|
 | `path` | Path to the `.laplace` source file to build. |
 | `stan_only` | If `TRUE`, return the path to the compiled `.stan` file instead of a `cmdstanr` model object. Default `FALSE`. |
-| `out_dir` | Where to write the compiled `.stan` file. Defaults to the source file's own directory when `stan_only = TRUE`, or a temp directory otherwise. |
+| `out_dir` | Where to write the compiled `.stan` file. Defaults to `build/` next to the `.laplace` file — the same place `laplace build` writes to, so the R and terminal routes produce the same file. |
+| `split_functions` | If `TRUE`, build with `--split-functions` (one `<pkg>.stanfunctions` file per imported package) and pass `out_dir` to cmdstanr as an include path. Default `FALSE`. |
 | `...` | Passed straight through to `cmdstanr::cmdstan_model()` (e.g. `compile = FALSE`). |
 
 ## What this package does *not* do

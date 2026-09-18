@@ -4,10 +4,18 @@
 \alias{laplace_model}
 \title{Compile a Laplace model and load it with cmdstanr}
 \usage{
-laplace_model(path, stan_only = FALSE, out_dir = NULL, ...)
+laplace_model(
+  path,
+  stan_only = FALSE,
+  out_dir = NULL,
+  split_functions = FALSE,
+  ...
+)
 }
 \arguments{
-\item{path}{Character. Path to the \code{.laplace} source file to build.}
+\item{path}{Character. Path to the \code{.laplace} source file to build. Its
+directory is treated as the project directory: \verb{laplace build} runs
+there, so it finds that project's \code{laplace.lock}.}
 
 \item{stan_only}{Logical. If \code{TRUE}, skip cmdstanr entirely and return the
 path to the compiled \code{.stan} file instead of a \code{cmdstanr} model object.
@@ -15,8 +23,14 @@ Use this if you want to drive cmdstanr (or anything else) yourself.
 Default \code{FALSE}.}
 
 \item{out_dir}{Character or \code{NULL}. Directory to write the compiled
-\code{.stan} file to. If \code{NULL} (the default), uses the same directory as
-\code{path} when \code{stan_only = TRUE}, and a temporary directory otherwise.}
+\code{.stan} file to. If \code{NULL} (the default), uses \verb{build/} inside the
+project directory -- the same place \verb{laplace build} writes to from the
+terminal, so both routes produce the same file.}
+
+\item{split_functions}{Logical. If \code{TRUE}, pass \code{--split-functions}: each
+imported package goes to its own \verb{<pkg>.stanfunctions} file next to the
+\code{.stan} file, and \code{out_dir} is handed to cmdstanr as an include path.
+Default \code{FALSE}.}
 
 \item{...}{Additional arguments passed through to
 \code{\link[cmdstanr:cmdstan_model]{cmdstanr::cmdstan_model()}} (e.g. \code{compile = FALSE}, \code{cpp_options}).
@@ -25,7 +39,7 @@ Ignored when \code{stan_only = TRUE}.}
 \value{
 If \code{stan_only = FALSE} (default), a \code{CmdStanModel} object as
 returned by \code{\link[cmdstanr:cmdstan_model]{cmdstanr::cmdstan_model()}}. If \code{stan_only = TRUE}, a
-character string giving the path to the compiled \code{.stan} file.
+character string giving the absolute path to the compiled \code{.stan} file.
 }
 \description{
 Thin wrapper around \verb{laplace build} that compiles a \code{.laplace} source file
@@ -39,7 +53,7 @@ before doing anything else with it.
 This function requires the \code{laplace} CLI to be installed and available on
 the system \code{PATH}. If it isn't found, an informative error is raised
 rather than a cryptic \code{system2} failure. See
-\url{https://github.com/mlatinov/laplace_tools} for installation instructions.
+\url{https://github.com/mlatinov/laplace} for installation instructions.
 }
 \examples{
 \dontrun{

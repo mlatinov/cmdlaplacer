@@ -1,11 +1,23 @@
 Package: cmdlaplacer
-Title: What the Package Does (One Line, Title Case)
+Title: Build 'Laplace' Models and Run Them with 'cmdstanr'
 Version: 0.0.0.9000
 Authors@R: 
-    person("First", "Last", , "first.last@example.com", role = c("aut", "cre"))
-Description: What the package does (one paragraph).
-License: `use_mit_license()`, `use_gpl3_license()` or friends to pick a
-    license
+    person("Metodi", "Latinov", , "latinovmetodi@gmail.com", role = c("aut", "cre", "cph"))
+Description: A thin R wrapper around the 'Laplace' compiler, which turns
+    '.laplace' source files (Stan plus a package manager and namespaced
+    imports) into plain, inspectable '.stan' files. Builds a model and hands
+    it to 'cmdstanr', adds git-hosted 'Laplace' libraries to a project, and
+    can install the 'laplace' command-line tool itself.
+License: MIT + file LICENSE
+URL: https://github.com/mlatinov/cmdlaplacer, https://github.com/mlatinov/laplace
+BugReports: https://github.com/mlatinov/cmdlaplacer/issues
+Imports:
+    utils
+Suggests:
+    cmdstanr
+Additional_repositories: https://stan-dev.r-universe.dev
+SystemRequirements: laplace (https://github.com/mlatinov/laplace); git and
+    cargo to install it with laplace_install()
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 8.0.0
