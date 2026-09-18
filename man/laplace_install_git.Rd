@@ -29,9 +29,9 @@ Give exactly one of \code{tag} or \code{rev}.}
 \item{subdir}{Character or \code{NULL}. Subdirectory within the repository
 where the library's \code{laplace.toml} lives, if it isn't at the repo root.}
 
-\item{project_dir}{Character. Directory containing the \code{laplace.toml} of
-the \emph{project} you're adding this dependency to (not the dependency's
-own manifest). Defaults to the current working directory.}
+\item{project_dir}{Character. Directory of the \emph{project} you're adding
+this dependency to (where its \code{laplace.toml} and \code{laplace.lock} live or
+will be created). Defaults to the current working directory.}
 }
 \value{
 Invisibly, the character vector of combined stdout/stderr lines
@@ -45,9 +45,9 @@ dependency, matching what \verb{laplace add --git} itself requires.
 }
 \details{
 This function requires the \code{laplace} CLI to be installed and available on
-\code{PATH} (see \code{\link[=laplace_install]{laplace_install()}}) and \code{project_dir} to contain a
-\code{laplace.toml} for the project you're adding the dependency to — this
-function does not create one.
+\code{PATH} (see \code{\link[=laplace_install]{laplace_install()}}). Like \verb{laplace add}, it creates the
+project's \code{laplace.toml} and \code{laplace.lock} if they don't exist yet, so it
+works in a fresh directory.
 }
 \examples{
 \dontrun{

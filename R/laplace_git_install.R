@@ -15,18 +15,18 @@
 #'   Give exactly one of `tag` or `rev`.
 #' @param subdir Character or `NULL`. Subdirectory within the repository
 #'   where the library's `laplace.toml` lives, if it isn't at the repo root.
-#' @param project_dir Character. Directory containing the `laplace.toml` of
-#'   the *project* you're adding this dependency to (not the dependency's
-#'   own manifest). Defaults to the current working directory.
+#' @param project_dir Character. Directory of the *project* you're adding
+#'   this dependency to (where its `laplace.toml` and `laplace.lock` live or
+#'   will be created). Defaults to the current working directory.
 #'
 #' @return Invisibly, the character vector of combined stdout/stderr lines
 #'   from `laplace add`.
 #'
 #' @details
 #' This function requires the `laplace` CLI to be installed and available on
-#' `PATH` (see [laplace_install()]) and `project_dir` to contain a
-#' `laplace.toml` for the project you're adding the dependency to — this
-#' function does not create one.
+#' `PATH` (see [laplace_install()]). Like `laplace add`, it creates the
+#' project's `laplace.toml` and `laplace.lock` if they don't exist yet, so it
+#' works in a fresh directory.
 #'
 #' @examples
 #' \dontrun{
@@ -61,36 +61,11 @@ laplace_install_git <- function(name,
   }
 
   project_dir <- path.expand(project_dir)
-  manifest_path <- file.path(project_dir, "laplace.toml")
-  if (!file.exists(manifest_path)) {
-    stop(
-      "No laplace.toml found in project_dir: ", project_dir, "\n",
-      "laplace_install_git() adds a dependency to an existing laplace project;\n",
-      "run laplace_model()/`laplace init` there first, or pass the correct project_dir.",
-      call. = FALSE
-    )
+  if (!dir.exists(project_dir)) {
+    stop("project_dir does not exist: ", project_dir, call. = FALSE)
   }
 
-  if (nzchar(Sys.which("laplace")) == FALSE) {
-
-    if (interactive()) {
-      install_now <- isTRUE(utils::askYesNo(
-        "The `laplace` CLI was not found on your PATH. Install it now via cargo? (requires git and cargo)"
-      ))
-      if (isTRUE(install_now)) {
-        laplace_install()
-      }
-    }
-
-    if (nzchar(Sys.which("laplace")) == FALSE) {
-      stop(
-        "Could not find the `laplace` CLI on your PATH.\n",
-        "Call laplace_install() to install it automatically, or see\n",
-        "https://github.com/mlatinov/laplace for manual installation instructions.",
-        call. = FALSE
-      )
-    }
-  }
+  ensure_laplace_cli()
 
   args <- c("add", name, "--git", repo)
   if (!is.null(tag)) args <- c(args, "--tag", tag)

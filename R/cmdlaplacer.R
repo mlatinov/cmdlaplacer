@@ -7,27 +7,34 @@
 #' build time and always writes a real, inspectable `.stan` file to disk
 #' before doing anything else with it.
 #'
-#' @param path Character. Path to the `.laplace` source file to build.
+#' @param path Character. Path to the `.laplace` source file to build. Its
+#'   directory is treated as the project directory: `laplace build` runs
+#'   there, so it finds that project's `laplace.lock`.
 #' @param stan_only Logical. If `TRUE`, skip cmdstanr entirely and return the
 #'   path to the compiled `.stan` file instead of a `cmdstanr` model object.
 #'   Use this if you want to drive cmdstanr (or anything else) yourself.
 #'   Default `FALSE`.
 #' @param out_dir Character or `NULL`. Directory to write the compiled
-#'   `.stan` file to. If `NULL` (the default), uses the same directory as
-#'   `path` when `stan_only = TRUE`, and a temporary directory otherwise.
+#'   `.stan` file to. If `NULL` (the default), uses `build/` inside the
+#'   project directory -- the same place `laplace build` writes to from the
+#'   terminal, so both routes produce the same file.
+#' @param split_functions Logical. If `TRUE`, pass `--split-functions`: each
+#'   imported package goes to its own `<pkg>.stanfunctions` file next to the
+#'   `.stan` file, and `out_dir` is handed to cmdstanr as an include path.
+#'   Default `FALSE`.
 #' @param ... Additional arguments passed through to
 #'   [cmdstanr::cmdstan_model()] (e.g. `compile = FALSE`, `cpp_options`).
 #'   Ignored when `stan_only = TRUE`.
 #'
 #' @return If `stan_only = FALSE` (default), a `CmdStanModel` object as
 #'   returned by [cmdstanr::cmdstan_model()]. If `stan_only = TRUE`, a
-#'   character string giving the path to the compiled `.stan` file.
+#'   character string giving the absolute path to the compiled `.stan` file.
 #'
 #' @details
 #' This function requires the `laplace` CLI to be installed and available on
 #' the system `PATH`. If it isn't found, an informative error is raised
 #' rather than a cryptic `system2` failure. See
-#' <https://github.com/mlatinov/laplace_tools> for installation instructions.
+#' <https://github.com/mlatinov/laplace> for installation instructions.
 #'
 #' @examples
 #' \dontrun{
@@ -40,45 +47,45 @@
 #' }
 #'
 #' @export
-laplace_model <- function(path, stan_only = FALSE, out_dir = NULL, ...) {
+laplace_model <- function(path,
+                          stan_only = FALSE,
+                          out_dir = NULL,
+                          split_functions = FALSE,
+                          ...) {
 
   if (!file.exists(path)) {
     stop("Laplace source file not found: ", path, call. = FALSE)
   }
+  path <- normalizePath(path, mustWork = TRUE)
+  project_dir <- dirname(path)
 
-  if (nzchar(Sys.which("laplace")) == FALSE) {
+  ensure_laplace_cli()
 
-    if (interactive()) {
-      install_now <- isTRUE(utils::askYesNo(
-        "The `laplace` CLI was not found on your PATH. Install it now via cargo? (requires git and cargo)"
-      ))
-      if (isTRUE(install_now)) {
-        laplace_install()
-      }
-    }
-
-    if (nzchar(Sys.which("laplace")) == FALSE) {
-      stop(
-        "Could not find the `laplace` CLI on your PATH.\n",
-        "laplace_model() requires the Laplace compiler to be installed.\n",
-        "Call laplace_install() to install it automatically, or see\n",
-        "https://github.com/mlatinov/laplace for manual installation instructions.",
-        call. = FALSE
-      )
-    }
-  }
-
+  # Made absolute before changing directory, so a relative `out_dir` means
+  # relative to where the caller is, as they would expect. (normalizePath()
+  # only absolutizes a path that exists, hence creating it first.)
   if (is.null(out_dir)) {
-    out_dir <- if (isTRUE(stan_only)) dirname(path) else tempdir()
+    out_dir <- file.path(project_dir, "build")
   }
-
+  out_dir <- path.expand(out_dir)
   if (!dir.exists(out_dir)) {
     dir.create(out_dir, recursive = TRUE)
   }
+  out_dir <- normalizePath(out_dir, mustWork = TRUE)
+  stan_path <- file.path(out_dir, sub("\\.laplace$", ".stan", basename(path)))
 
+  # `laplace build` reads laplace.lock from the working directory, so it has
+  # to run inside the project, wherever the caller happens to be.
+  old_wd <- setwd(project_dir)
+  on.exit(setwd(old_wd), add = TRUE)
+
+  args <- c("build", shQuote(basename(path)), "--output", shQuote(stan_path))
+  if (isTRUE(split_functions)) {
+    args <- c(args, "--split-functions")
+  }
   build_result <- system2(
     "laplace",
-    args = c("build", shQuote(path), "--out", shQuote(out_dir)),
+    args = args,
     stdout = TRUE,
     stderr = TRUE
   )
@@ -91,8 +98,6 @@ laplace_model <- function(path, stan_only = FALSE, out_dir = NULL, ...) {
       call. = FALSE
     )
   }
-
-  stan_path <- file.path(out_dir, sub("\\.laplace$", ".stan", basename(path)))
 
   if (!file.exists(stan_path)) {
     stop(
@@ -116,5 +121,36 @@ laplace_model <- function(path, stan_only = FALSE, out_dir = NULL, ...) {
     )
   }
 
-  cmdstanr::cmdstan_model(stan_path, ...)
+  if (isTRUE(split_functions)) {
+    cmdstanr::cmdstan_model(stan_path, include_paths = out_dir, ...)
+  } else {
+    cmdstanr::cmdstan_model(stan_path, ...)
+  }
+}
+
+# Stop with an informative error unless the `laplace` CLI is on PATH,
+# offering to install it first in an interactive session.
+ensure_laplace_cli <- function() {
+  if (nzchar(Sys.which("laplace"))) {
+    return(invisible(TRUE))
+  }
+
+  if (interactive()) {
+    install_now <- isTRUE(utils::askYesNo(
+      "The `laplace` CLI was not found on your PATH. Install it now via cargo? (requires git and cargo)"
+    ))
+    if (isTRUE(install_now)) {
+      laplace_install()
+    }
+  }
+
+  if (!nzchar(Sys.which("laplace"))) {
+    stop(
+      "Could not find the `laplace` CLI on your PATH.\n",
+      "Call laplace_install() to install it automatically, or see\n",
+      "https://github.com/mlatinov/laplace for manual installation instructions.",
+      call. = FALSE
+    )
+  }
+  invisible(TRUE)
 }
