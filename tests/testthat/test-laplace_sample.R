@@ -14,15 +14,50 @@ skip_without_sampler <- function() {
   skip_if(!nzchar(Sys.which("laplace-sample")), "laplace-sample is not on PATH")
 }
 
-test_that("the diagnostics note names non-NUTS samplers only", {
-  expect_null(sample_diagnostics_note("nuts"))
+draws_with <- function(...) {
+  cols <- list(...)
+  n <- 4
+  base <- list(accept_stat__ = runif(n), stepsize__ = rep(0.5, n), treedepth__ = rep(2, n),
+               n_leapfrog__ = rep(3, n), divergent__ = rep(0, n), energy__ = rnorm(n),
+               n_grad__ = rep(3, n))
+  base[names(cols)] <- cols
+  posterior::as_draws_df(base)
+}
+
+test_that("the note is built from the all-NaN columns", {
+  skip_if_not_installed("posterior")
+  # NUTS: every column has values -> no note, every check runs.
+  nuts <- all_nan_columns(draws_with())
+  expect_identical(nuts, character())
+  expect_null(sample_diagnostics_note("nuts", nuts))
+  expect_identical(applicable_diagnostics(nuts), c("divergences", "treedepth", "ebfmi"))
+
+  # MALA / RWM: all four NaN.
+  mala <- all_nan_columns(draws_with(treedepth__ = rep(NaN, 4), n_leapfrog__ = rep(NaN, 4),
+                                     divergent__ = rep(NaN, 4), energy__ = rep(NaN, 4)))
+  expect_identical(mala, c("treedepth__", "n_leapfrog__", "divergent__", "energy__"))
   expect_identical(
-    sample_diagnostics_note("mala"),
-    "Tree depth and divergence diagnostics don't apply to mala; see n_grad__ and accept_stat__ instead."
+    sample_diagnostics_note("mala", mala),
+    paste("Tree depth, leapfrog steps, divergences and E-BFMI don't apply to mala:",
+          "`treedepth__`, `n_leapfrog__`, `divergent__` and `energy__` are NaN in every draw.",
+          "See n_grad__ and accept_stat__ instead.")
   )
-  for (s in c("rwm", "hmc")) {
-    expect_match(sample_diagnostics_note(s), paste0("don't apply to ", s, ";"), fixed = TRUE)
-  }
+  expect_identical(applicable_diagnostics(mala), character())
+
+  # Static HMC: only tree depth is NaN; divergences and E-BFMI still checked.
+  hmc <- all_nan_columns(draws_with(treedepth__ = rep(NaN, 4)))
+  expect_identical(hmc, "treedepth__")
+  expect_identical(
+    sample_diagnostics_note("hmc", hmc),
+    "Tree depth doesn't apply to hmc: `treedepth__` is NaN in every draw. See n_grad__ and accept_stat__ instead."
+  )
+  expect_identical(applicable_diagnostics(hmc), c("divergences", "ebfmi"))
+
+  expect_match(sample_diagnostics_note("x", "divergent__"), "^Divergences don't apply to x:")
+  expect_match(sample_diagnostics_note("x", "energy__"), "^E-BFMI doesn't apply to x:")
+
+  # Partly NaN is not "doesn't apply".
+  expect_identical(all_nan_columns(draws_with(energy__ = c(NaN, 1, 2, 3))), character())
 })
 
 test_that("arguments map onto laplace-sample flags", {
@@ -63,7 +98,9 @@ test_that("laplace_sample() returns a cmdstanr fit and notes non-NUTS diagnostic
   expect_no_warning(expect_message(
     fit <- laplace_sample(path, sampler = "mala", chains = 2, seed = 1,
                           iter_warmup = 200, iter_sampling = 200),
-    "Tree depth and divergence diagnostics don't apply to mala; see n_grad__ and accept_stat__ instead.",
+    paste("Tree depth, leapfrog steps, divergences and E-BFMI don't apply to mala:",
+          "`treedepth__`, `n_leapfrog__`, `divergent__` and `energy__` are NaN in every draw.",
+          "See n_grad__ and accept_stat__ instead."),
     fixed = TRUE
   ))
   expect_s3_class(fit, "CmdStanMCMC")
@@ -76,6 +113,18 @@ test_that("laplace_sample() returns a cmdstanr fit and notes non-NUTS diagnostic
   expect_match(fit$metadata()$laplace_sampler, "^mala \\(sha256: [0-9a-f]{64}\\)$")
 })
 
+test_that("for hmc the note names only tree depth", {
+  skip_without_sampler()
+  expect_message(
+    fit <- laplace_sample(std_normal_stan(), sampler = "hmc", chains = 2, seed = 3,
+                          iter_warmup = 200, iter_sampling = 200),
+    "Tree depth doesn't apply to hmc: `treedepth__` is NaN in every draw. See n_grad__ and accept_stat__ instead.",
+    fixed = TRUE
+  )
+  ds <- fit$diagnostic_summary(quiet = TRUE)
+  expect_false(any(is.nan(ds$num_divergent)))
+})
+
 test_that("NUTS runs without the note, and data and sampler_args pass through", {
   skip_without_sampler()
   dir <- withr::local_tempdir()
@@ -85,7 +134,7 @@ test_that("NUTS runs without the note, and data and sampler_args pass through", 
     fit <- laplace_sample(path, data = list(mu = 3), chains = 2, seed = 2,
                           sampler_args = list(max_depth = 5),
                           iter_warmup = 200, iter_sampling = 200),
-    message = "don't apply"
+    message = "apply to"
   )
   expect_equal(fit$summary("x")$mean, 3, tolerance = 0.3)
   expect_match(fit$metadata()$laplace_settings, "max_depth:5", fixed = TRUE)

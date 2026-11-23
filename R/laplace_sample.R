@@ -30,12 +30,16 @@
 #' `.laplace` model, the `laplace` compiler). From a laplace checkout:
 #' `cargo install --path laplace-sample --root ~/.local --force`.
 #'
-#' For a sampler other than NUTS, tree depth and divergences are not
-#' defined: those CSV columns hold `NaN`, `$diagnostic_summary()` shows `NaN`
-#' divergences and an `NA` E-BFMI, and still reports `num_max_treedepth = 0`
-#' (cmdstanr drops the `NaN`s when it counts). `laplace_sample()` says so in
-#' a message after the fit; `n_grad__` (gradient evaluations per draw) and
-#' `accept_stat__` are the diagnostics to look at instead.
+#' A NUTS diagnostic that does not apply to the sampler that ran is written
+#' as `NaN` in every draw (`treedepth__`, `n_leapfrog__`, `divergent__`,
+#' `energy__`): MALA and RWM have none of them, static HMC has no tree
+#' depth. cmdstanr would still report `num_max_treedepth = 0` from an
+#' all-`NaN` column (it drops the `NaN`s when it counts), so
+#' `laplace_sample()` reads the columns after the fit and, when any is
+#' all-`NaN`, says which diagnostics don't apply in one message. It runs
+#' cmdstanr's usual divergence / tree-depth / E-BFMI checks only for the
+#' columns that hold real values. `n_grad__` (gradient evaluations per draw)
+#' and `accept_stat__` are always present.
 #'
 #' @examples
 #' \dontrun{
@@ -98,11 +102,15 @@ laplace_sample <- function(model,
   }
   files <- normalizePath(out[nzchar(out)], mustWork = TRUE)
 
-  note <- sample_diagnostics_note(sampler)
-  # cmdstanr's diagnostic check is NUTS-specific: for any other sampler it
-  # only warns that E-BFMI cannot be computed from the NaN energy__ column.
-  # The note below says what applies instead.
-  fit <- cmdstanr::as_cmdstan_fit(files, check_diagnostics = is.null(note))
+  # cmdstanr's own check runs every NUTS diagnostic; run only the ones whose
+  # columns hold values, and say which do not apply.
+  fit <- cmdstanr::as_cmdstan_fit(files, check_diagnostics = FALSE)
+  nan_columns <- all_nan_columns(fit$sampler_diagnostics(format = "draws_df"))
+  applicable <- applicable_diagnostics(nan_columns)
+  if (length(applicable)) {
+    fit$diagnostic_summary(diagnostics = applicable, quiet = FALSE)
+  }
+  note <- sample_diagnostics_note(sampler, nan_columns)
   if (!is.null(note)) {
     message(note)
   }
@@ -155,14 +163,49 @@ laplace_sample_args <- function(model_path, data_path, sampler, chains, seed,
   args
 }
 
-# One message for samplers where tree depth and divergences don't apply
-# (their CSV columns are NaN, and cmdstanr still reports num_max_treedepth = 0).
-sample_diagnostics_note <- function(sampler) {
-  if (identical(sampler, "nuts")) {
+# The NUTS columns laplace-sample writes as NaN when they do not apply, in
+# the order the note names them, with what each one diagnoses.
+nuts_columns <- c(
+  treedepth__ = "tree depth",
+  n_leapfrog__ = "leapfrog steps",
+  divergent__ = "divergences",
+  energy__ = "E-BFMI"
+)
+
+# The NUTS columns that are NaN in every draw of every chain.
+all_nan_columns <- function(diagnostics) {
+  present <- intersect(names(nuts_columns), names(diagnostics))
+  present[vapply(present, function(col) {
+    v <- diagnostics[[col]]
+    length(v) > 0 && all(is.nan(v))
+  }, logical(1))]
+}
+
+# cmdstanr diagnostic_summary() checks whose columns hold real values.
+applicable_diagnostics <- function(nan_columns) {
+  checks <- c(divergences = "divergent__", treedepth = "treedepth__", ebfmi = "energy__")
+  names(checks)[!checks %in% nan_columns]
+}
+
+# One message naming the diagnostics that don't apply, built from the
+# all-NaN columns; NULL when every NUTS column has values. Tree depth is
+# always named when its column is NaN, because cmdstanr would otherwise
+# report num_max_treedepth = 0 for it.
+sample_diagnostics_note <- function(sampler, nan_columns) {
+  nan_columns <- names(nuts_columns)[names(nuts_columns) %in% nan_columns]
+  if (!length(nan_columns)) {
     return(NULL)
   }
+  what <- unname(nuts_columns[nan_columns])
+  cols <- paste0("`", nan_columns, "`")
+  list_words <- function(x) {
+    if (length(x) == 1) x else paste(paste(x[-length(x)], collapse = ", "), "and", x[length(x)])
+  }
+  what_text <- list_words(what)
+  substr(what_text, 1, 1) <- toupper(substr(what_text, 1, 1))
   sprintf(
-    "Tree depth and divergence diagnostics don't apply to %s; see n_grad__ and accept_stat__ instead.",
-    sampler
+    "%s %s apply to %s: %s %s NaN in every draw. See n_grad__ and accept_stat__ instead.",
+    what_text, if (length(what) == 1 && what %in% c("tree depth", "E-BFMI")) "doesn't" else "don't",
+    sampler, list_words(cols), if (length(cols) == 1) "is" else "are"
   )
 }

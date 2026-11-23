@@ -56,12 +56,16 @@ Requires the \code{laplace-sample} binary on the \code{PATH} (and, for a
 \code{.laplace} model, the \code{laplace} compiler). From a laplace checkout:
 \verb{cargo install --path laplace-sample --root ~/.local --force}.
 
-For a sampler other than NUTS, tree depth and divergences are not
-defined: those CSV columns hold \code{NaN}, \verb{$diagnostic_summary()} shows \code{NaN}
-divergences and an \code{NA} E-BFMI, and still reports \code{num_max_treedepth = 0}
-(cmdstanr drops the \code{NaN}s when it counts). \code{laplace_sample()} says so in
-a message after the fit; \code{n_grad__} (gradient evaluations per draw) and
-\code{accept_stat__} are the diagnostics to look at instead.
+A NUTS diagnostic that does not apply to the sampler that ran is written
+as \code{NaN} in every draw (\code{treedepth__}, \code{n_leapfrog__}, \code{divergent__},
+\code{energy__}): MALA and RWM have none of them, static HMC has no tree
+depth. cmdstanr would still report \code{num_max_treedepth = 0} from an
+all-\code{NaN} column (it drops the \code{NaN}s when it counts), so
+\code{laplace_sample()} reads the columns after the fit and, when any is
+all-\code{NaN}, says which diagnostics don't apply in one message. It runs
+cmdstanr's usual divergence / tree-depth / E-BFMI checks only for the
+columns that hold real values. \code{n_grad__} (gradient evaluations per draw)
+and \code{accept_stat__} are always present.
 }
 \examples{
 \dontrun{
