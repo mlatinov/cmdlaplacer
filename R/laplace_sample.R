@@ -29,6 +29,12 @@
 #' Requires the `laplace-sample` binary on the `PATH` (and, for a
 #' `.laplace` model, the `laplace` compiler). From a laplace checkout:
 #' `cargo install --path laplace-sample --root ~/.local --force`.
+#' Custom samplers are experimental in laplace 0.3.0.
+#'
+#' `laplace-sample` must be 0.3.0 or newer, and the same version as the
+#' `laplace` compiler: the two are released together. `laplace_sample()`
+#' asks both for `--version` and, on a mismatch (or no answer), warns with
+#' both versions and the install command, then runs anyway.
 #'
 #' A NUTS diagnostic that does not apply to the sampler that ran is written
 #' as `NaN` in every draw (`treedepth__`, `n_leapfrog__`, `divergent__`,
@@ -70,6 +76,11 @@ laplace_sample <- function(model,
       "  cargo install --path laplace-sample --root ~/.local --force",
       call. = FALSE
     )
+  }
+
+  problem <- sampler_version_problem(binary_version(bin), binary_version(Sys.which("laplace")))
+  if (!is.null(problem)) {
+    warning(problem, call. = FALSE)
   }
 
   model_path <- sample_model_path(model)
@@ -209,4 +220,57 @@ sample_diagnostics_note <- function(sampler, nan_columns) {
     what_text, if (length(what) == 1 && what %in% c("tree depth", "E-BFMI")) "doesn't" else "don't",
     sampler, list_words(cols), if (length(cols) == 1) "is" else "are"
   )
+}
+
+# The oldest laplace-sample laplace_sample() works with: the first release,
+# and the first to write the n_logp__ column documented above.
+min_sampler_version <- "0.3.0"
+
+# The version a laplace binary reports with `--version` ("laplace-sample
+# 0.3.0", "laplace 0.3.0 (abc1234)"), or NULL when there is no binary or no
+# usable answer.
+binary_version <- function(bin) {
+  if (!nzchar(bin)) {
+    return(NULL)
+  }
+  out <- tryCatch(
+    suppressWarnings(system2(bin, "--version", stdout = TRUE, stderr = FALSE)),
+    error = function(e) character()
+  )
+  status <- attr(out, "status")
+  if (length(out) == 0 || (!is.null(status) && status != 0)) {
+    return(NULL)
+  }
+  version <- strsplit(trimws(out[[1]]), "\\s+")[[1]][2]
+  if (is.na(version) || is.na(package_version(version, strict = FALSE))) {
+    return(NULL)
+  }
+  version
+}
+
+# laplace and laplace-sample are released together with one version. NULL
+# when `sampler` is fine; otherwise the warning, naming both versions and the
+# install command. `laplace` may be NULL (the compiler is not on PATH): then
+# only the minimum is checked.
+sampler_version_problem <- function(sampler, laplace) {
+  want <- if (is.null(laplace)) min_sampler_version else laplace
+  install <- sprintf(
+    "install it with: cargo install --locked --git https://github.com/mlatinov/laplace --tag v%s laplace-sample",
+    want
+  )
+  installed <- if (is.null(laplace)) "laplace is not on PATH" else sprintf("laplace is %s", laplace)
+  if (is.null(sampler)) {
+    return(sprintf(
+      "Could not tell which laplace-sample this is (`laplace-sample --version` gave no version); %s, and laplace_sample() needs laplace-sample >= %s.\n%s",
+      installed, min_sampler_version, install
+    ))
+  }
+  too_old <- package_version(sampler) < package_version(min_sampler_version)
+  differs <- !is.null(laplace) && sampler != laplace
+  if (!too_old && !differs) {
+    return(NULL)
+  }
+  why <- if (too_old) sprintf("laplace_sample() needs laplace-sample >= %s", min_sampler_version) else
+    "the two are released together and should be the same version"
+  sprintf("laplace-sample is %s but %s; %s.\n%s", sampler, installed, why, install)
 }

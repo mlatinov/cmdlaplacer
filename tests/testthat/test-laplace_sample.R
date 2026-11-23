@@ -140,3 +140,69 @@ test_that("NUTS runs without the note, and data and sampler_args pass through", 
   expect_match(fit$metadata()$laplace_settings, "max_depth:5", fixed = TRUE)
   expect_false(any(is.nan(fit$diagnostic_summary(quiet = TRUE)$num_divergent)))
 })
+
+# A fake binary that answers `--version` with `line` (or nothing, and fails).
+fake_binary <- function(name, line, dir) {
+  path <- file.path(dir, name)
+  body <- if (is.null(line)) "exit 2" else sprintf("echo '%s'", line)
+  writeLines(c("#!/bin/sh", body), path)
+  Sys.chmod(path, "755")
+  path
+}
+
+test_that("versions are read from --version", {
+  skip_on_os("windows")
+  dir <- withr::local_tempdir()
+  expect_identical(binary_version(fake_binary("ls", "laplace-sample 0.3.0", dir)), "0.3.0")
+  expect_identical(binary_version(fake_binary("lc", "laplace 0.3.0 (abc1234)", dir)), "0.3.0")
+  expect_null(binary_version(fake_binary("none", NULL, dir)), "no output")
+  expect_null(binary_version(fake_binary("junk", "hello", dir)), "no version in the output")
+  expect_null(binary_version(""), "not on PATH")
+})
+
+test_that("matching versions are quiet", {
+  expect_null(sampler_version_problem("0.3.0", "0.3.0"))
+  expect_null(sampler_version_problem("0.4.1", NULL), "no laplace: only the minimum")
+})
+
+test_that("a mismatch or a too-old laplace-sample warns with both versions and the install command", {
+  differs <- sampler_version_problem("0.3.0", "0.4.0")
+  expect_match(differs, "laplace-sample is 0.3.0 but laplace is 0.4.0", fixed = TRUE)
+  expect_match(differs, "released together", fixed = TRUE)
+  expect_match(differs, "cargo install --locked --git https://github.com/mlatinov/laplace --tag v0.4.0 laplace-sample",
+               fixed = TRUE)
+
+  old <- sampler_version_problem("0.1.0", NULL)
+  expect_match(old, "laplace-sample is 0.1.0 but laplace is not on PATH", fixed = TRUE)
+  expect_match(old, "needs laplace-sample >= 0.3.0", fixed = TRUE)
+  expect_match(old, "--tag v0.3.0 laplace-sample", fixed = TRUE)
+})
+
+test_that("no version output warns too", {
+  msg <- sampler_version_problem(NULL, "0.3.0")
+  expect_match(msg, "Could not tell which laplace-sample this is", fixed = TRUE)
+  expect_match(msg, "laplace is 0.3.0", fixed = TRUE)
+  expect_match(msg, "--tag v0.3.0 laplace-sample", fixed = TRUE)
+})
+
+test_that("laplace_sample() warns about a mismatched laplace-sample and still runs", {
+  skip_on_os("windows")
+  skip_if_not_installed("cmdstanr")
+  dir <- withr::local_tempdir()
+  # A laplace-sample that reports 0.1.0, then fails the run itself: the
+  # warning comes first, and the call goes on to run it.
+  writeLines(c("#!/bin/sh", "if [ \"$1\" = --version ]; then echo 'laplace-sample 0.1.0'; exit 0; fi",
+               "echo ran >&2", "exit 3"), file.path(dir, "laplace-sample"))
+  Sys.chmod(file.path(dir, "laplace-sample"), "755")
+  withr::local_path(dir, action = "prefix")
+  # Every warning is collected: system2() adds its own for the failed run.
+  warnings <- character()
+  withCallingHandlers(
+    expect_error(laplace_sample(std_normal_stan()), "`laplace-sample` failed (exit status 3)", fixed = TRUE),
+    warning = function(w) {
+      warnings <<- c(warnings, conditionMessage(w))
+      invokeRestart("muffleWarning")
+    }
+  )
+  expect_true(any(grepl("laplace-sample is 0.1.0", warnings, fixed = TRUE)), info = paste(warnings, collapse = "\n"))
+})

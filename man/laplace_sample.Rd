@@ -55,6 +55,12 @@ result is an ordinary cmdstanr fit, read from the CmdStan-style CSV files
 Requires the \code{laplace-sample} binary on the \code{PATH} (and, for a
 \code{.laplace} model, the \code{laplace} compiler). From a laplace checkout:
 \verb{cargo install --path laplace-sample --root ~/.local --force}.
+Custom samplers are experimental in laplace 0.3.0.
+
+\code{laplace-sample} must be 0.3.0 or newer, and the same version as the
+\code{laplace} compiler: the two are released together. \code{laplace_sample()}
+asks both for \code{--version} and, on a mismatch (or no answer), warns with
+both versions and the install command, then runs anyway.
 
 A NUTS diagnostic that does not apply to the sampler that ran is written
 as \code{NaN} in every draw (\code{treedepth__}, \code{n_leapfrog__}, \code{divergent__},
