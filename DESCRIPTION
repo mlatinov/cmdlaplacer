@@ -14,7 +14,10 @@ BugReports: https://github.com/mlatinov/cmdlaplacer/issues
 Imports:
     utils
 Suggests:
-    cmdstanr
+    cmdstanr,
+    testthat (>= 3.0.0),
+    withr
+Config/testthat/edition: 3
 Additional_repositories: https://stan-dev.r-universe.dev
 SystemRequirements: laplace (https://github.com/mlatinov/laplace); git and
     cargo to install it with laplace_install()

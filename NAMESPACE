@@ -3,3 +3,4 @@
 export(laplace_install)
 export(laplace_install_git)
 export(laplace_model)
+export(laplace_sample)
