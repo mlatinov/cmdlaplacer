@@ -64,8 +64,9 @@ all-\code{NaN} column (it drops the \code{NaN}s when it counts), so
 \code{laplace_sample()} reads the columns after the fit and, when any is
 all-\code{NaN}, says which diagnostics don't apply in one message. It runs
 cmdstanr's usual divergence / tree-depth / E-BFMI checks only for the
-columns that hold real values. \code{n_grad__} (gradient evaluations per draw)
-and \code{accept_stat__} are always present.
+columns that hold real values. \code{n_grad__} (gradient evaluations per draw),
+\code{n_logp__} (density-only evaluations per draw, e.g. by \code{rwm}) and
+\code{accept_stat__} are always present.
 }
 \examples{
 \dontrun{

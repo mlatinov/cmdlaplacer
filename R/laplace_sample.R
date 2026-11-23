@@ -38,8 +38,9 @@
 #' `laplace_sample()` reads the columns after the fit and, when any is
 #' all-`NaN`, says which diagnostics don't apply in one message. It runs
 #' cmdstanr's usual divergence / tree-depth / E-BFMI checks only for the
-#' columns that hold real values. `n_grad__` (gradient evaluations per draw)
-#' and `accept_stat__` are always present.
+#' columns that hold real values. `n_grad__` (gradient evaluations per draw),
+#' `n_logp__` (density-only evaluations per draw, e.g. by `rwm`) and
+#' `accept_stat__` are always present.
 #'
 #' @examples
 #' \dontrun{
